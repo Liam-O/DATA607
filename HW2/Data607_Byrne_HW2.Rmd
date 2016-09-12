@@ -1,0 +1,50 @@
+---
+title: "DATA 607 HW 2"
+author: "Liam Byrne"
+date: "September 11, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+if(!require("RMySQL", character.only = TRUE, quietly = TRUE)) {
+    install.packages("RMySQL")
+    library("RMySQL", character.only = TRUE)
+}
+```
+
+#### Movie Review Database
+
+The package `RMySQL` is used to access the `movieRatings` dabtabse, which was created within MySQL.
+
+```{r}
+mydb <- dbConnect(MySQL(), user = "root", password = "root", dbname = "movieratings", host = "localhost")
+```
+
+Three tables were created for the `movieRatings` database.
+
+```{r}
+dbListTables(mydb)
+```
+
+The `movies` table contains the names of the movies:
+
+```{r}
+movies <- dbGetQuery(mydb, "SELECT * FROM movies")
+movies
+```
+
+The `reviewers` table stores information about the movie reviewers:
+
+```{r}
+reviewers <- dbGetQuery(mydb, "SELECT * FROM reviewers")
+reviewers
+```
+
+The `ratings` table stores information about the movie ratings from the respective reviewers:
+
+```{r}
+ratings <- dbGetQuery(mydb, "SELECT * FROM ratings")
+head(ratings)
+```
