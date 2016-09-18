@@ -1,0 +1,137 @@
+---
+title: "607_HW3"
+author: "Liam Byrne"
+date: "September 17, 2016"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = TRUE)
+
+if(!require("stringr", character.only = TRUE, quietly = TRUE)) {
+    install.packages("strinr")
+    library("stringr", character.only = TRUE)
+}
+```
+***
+#### 3 Extracting Names From `raw.data`
+
+The `raw.data` set has telephone numbers preceeding the person they belong to. Using the `stringr` package and regex, we extract the names out:
+```{r}
+
+raw.data <- "555-1239Moe Szyslak(636) 555-0113Burns, C. Montgomery555-6542
+Rev. Timothy Lovejoy555 8904Ned Flanders636-555-3226
+Simpson, Homer5553642Dr. Julius Hibbert"
+
+(name <- unlist(str_extract_all(raw.data, "[[:alpha:]., ]{2,}")))
+```
+
+#### 3.a Names in Uniform Order
+
+The names in `name` are not in the same format, i.e. lastname and first name seperated by a comma. The following code utilizes groupings and look aheads to arrange the names in a uniform order:
+
+```{r}
+(name <- sub("(^\\w+(?=,))(, )(.*)", "\\3 \\1", name, perl = TRUE))
+```
+
+#### 3.b Detecting a Title in a Name
+
+Some of the names in `name` have a title, i.e., Rev. and Dr. Keeping things simple, we can create a list of titles and pass it through funcitons in the `sringr` package to see if the names have a title matched from the list:
+
+```{r}
+titles <- c("Rev.", "Dr.")
+
+title <- str_detect(name, titles)
+
+data.frame(name = name, title = title)
+```
+
+##### 3.c Detecting Second Names
+
+Since the individuals with titles are known from above, if the person's name exceeds two names (not including their title) then the individual has a second name. Applying this logic:
+
+```{r}
+data.frame(name = name, secondName = ((str_count(name, "\\s") - title) > 1))
+```
+
+#### 4 String Types and Regex
+
+The following examples are regular expressions and string types that they would match to.
+
+#### 4.a `[0-9]+\\$`
+
+The above regex would match any non-comma/decimal number with a dollar sign after it. Some countries outside of the U.S. reflect dollar amounts as such. If the numbers did have commas or decimals, only the number to the right of these would show, e.g.,:
+```{r}
+pat1 <- "[0-9]+\\$"
+
+dummy_str1 <- c("Jane Doe Account balance = 123123$",
+                "John Doe Account balance = 123,432$",
+                "John Lennon Account balance = $1234213")
+
+data.frame(string = dummy_str1, match = str_extract(dummy_str1, pat1))
+```
+
+#### 4.b `\\b[a-z]{1,4}\\b`
+
+The above regex would match any letter bounded by whitespace or punctuation not exceeding a length of four, e.g.,:
+
+```{r}
+pat2 <- "\\b[a-z]{1,4}\\b"
+
+dummy_str2 <- c("an1 _abc abcd.",
+                "ab1 _a_ (abcd)",
+                "ab1 123?a?123")
+
+data.frame(string = dummy_str2, match = str_extract(dummy_str2, pat2))
+```
+
+#### 4.c `.*?\\.txt$`
+
+The above regex would be able to find file names in a list that have the .txt extension, e.g.,:
+
+```{r}
+pat3 <- ".*?\\.txt$"
+
+dummy_str3 <- c("Data607_HW3.csv",
+                "Data607_HW3.txt",
+                "Data607_HW3.Rmd")
+
+data.frame(string = dummy_str3, match = str_extract(dummy_str3, pat3))
+```
+
+#### 4.d `\\d{2}/\\d{2}/\\d{4}`
+
+The above regex would be able to find dates under the format mm/dd/yyyy or dd/mm/yyyy, e.g.,:
+
+```{r}
+pat4 <- "\\d{2}/\\d{2}/\\d{4}"
+
+dummy_str4 <- c("1/23/1994",
+                "01/23/1994",
+                "08/27/80",
+                "08/27/1980",
+                "1/1/2001",
+                "23/01/2001",
+                "23-01-2001")
+
+data.frame(string = dummy_str4, match = str_extract(dummy_str4, pat4))
+```
+
+#### 4.e `<(.+?)>.+?<\/\\1`
+
+The above regex matches the first, if applicable, instance of a string insde of `<string>` up to the next occurance of `<string` as long as there is a char(s) of sort in between, e.g.,:
+
+```{r}
+pat5 <- "<(.+?)>.+?</\\1"
+
+dummy_str5 <- c("<123> </123>",
+                "<123> </a23",
+                "<123> abcd </123abcd",
+                "<123></123>",
+                "<123> <123> </123",
+                "<123> abc </124",
+                "abc<123> def <<</1234>")
+
+data.frame(string = dummy_str5, match = str_extract(dummy_str5, pat5))
+```
+
