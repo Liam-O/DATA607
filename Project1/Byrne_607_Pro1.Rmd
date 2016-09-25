@@ -1,59 +1,190 @@
 ---
-title: "Project 1"
+title: "Cleaning, Viewing and Exporting Structured Data"
 author: "Liam Byrne"
-date: "September 18, 2016"
-output: html_document
-runtime: shiny
+date: "`r Sys.Date()`"
+output:
+  rmdformats::readthedown:
+    highlight: kate
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r knitr_init, echo=FALSE, cache=FALSE}
+if(!require("knitr", character.only = TRUE, quietly = TRUE)) {
+    install.packages("knitr")
+    library("knitr", character.only = TRUE)
+}
+
+if(!require("rmdformats", character.only = TRUE, quietly = TRUE)) {
+    install.packages("rmdformats")
+    library("rmdformats", character.only = TRUE)
+}
+
+## Global options
+options(max.print="75")
+opts_chunk$set(cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=100)
+
+if(!require("stringr", character.only = TRUE, quietly = TRUE)) {
+    install.packages("strinr")
+    library("stringr", character.only = TRUE)
+}
+
+if(!require("DT", character.only = TRUE, quietly = TRUE)) {
+    install.packages("DT")
+    library("DT", character.only = TRUE)
+}
+
+if(!require("ggplot2", character.only = TRUE, quietly = TRUE)) {
+    install.packages("ggplot2")
+    library("ggplot2", character.only = TRUE)
+}
+```
+***
+# Introduction
+## Project Overview:
+
+The subsequent file, `tournament`, is a text file giving the results of an arbitrary chess tournament. Due to its semi-structured state, it is feasible to extract pertinent information using some basic R and package tools. The main push of the assignment is to load in the .txt and extract the prescribed information (namely: the player's name; their state; their point total; the player's pre-rating and the combined pre-tournament rating average of their respective opponents) and export the data to a csv file. The following exhibits one particular method of achieving this.
+
+## Relevence:
+
+The majority of data encountered in "the field" is not organized and pretty. It is mangled and from multiple sources. It could be financial data in some bank-specific format or scrapped data from an API with html code hugging every target value. The ability to operate-on and clean such data is pertinent in the toolbox of any data scientist.
+
+## Data Reference and Libraries
+
+The .txt is available in its raw format [here](https://raw.githubusercontent.com/Liam-O/DATA607/master/Project1/tournamentinfo.txt). There is no data dictionary, but one is necessary for the scope of this assignment. For the layman/woman: some further reading is available from [this wiki](https://en.wikipedia.org/wiki/Chess_rating_system).
+
+Outside of formatting packages, the libraries used for this project are:
+
+* `stringr` - For regex-based functions to clean and restructure the document.
+* `DT` - To create an interactive data table.
+* `ggplot` - Provides some more advanced plotting utilities.
+
+***
+# Creation of Data Table
+## Cleanup
+
+The data from the chess tournament, in its semi-structured state, is easy for the human eye to comprehend. After a few glances and a little understanding of some chess lingo, we can get a general idea of how each individual performed. An example of four individuals under the current structure:
+
+```{r read, echo = FALSE}
+# Read text file line by line
+tournament <- readLines(
+    "https://raw.githubusercontent.com/Liam-O/DATA607/master/Project1/tournamentinfo.txt", warn = FALSE)
+
+tournament[1:16]
 ```
 
-This R Markdown document is made interactive using Shiny. Unlike the more traditional workflow of creating static reports, you can now create documents that allow your readers to change the assumptions underlying your analysis and see the results immediately. 
+If we wanted to do any computational analysis, i.e, convert the data into a table and do basic summary statistics, it would be a very difficult feat under the data's current format. There are numerous things standing in our way, e.g., white space padding and the "---" lines. With some regex and tools from the `stringr` package, it is relatively easy to remove these issues and leave us with clearer sense of the data we are working with:
 
-To learn more, see [Interactive Documents](http://rmarkdown.rstudio.com/authoring_shiny.html).
+```{r cleanup1}
+# Remove header, leading, tailing and excessive whitespace:
+tournament <- tournament[5:length(tournament)]
+tournament <- gsub("^[[:space:]]+?|(?<=\\|)[[:space:]]+?|[[:space:]]+?(?=\\|)", "",
+                   tournament, perl = TRUE)
+tournament <- gsub("[[:space:]]{2,}", " ", tournament, perl = TRUE)
 
-## Inputs and Outputs
-
-You can embed Shiny inputs and outputs in your document. Outputs are automatically updated whenever inputs change.  This demonstrates how a standard R plot can be made interactive by wrapping it in the Shiny `renderPlot` function. The `selectInput` and `sliderInput` functions create the input widgets used to drive the plot.
-
-```{r eruptions, echo=FALSE}
-inputPanel(
-  selectInput("n_breaks", label = "Number of bins:",
-              choices = c(10, 20, 35, 50), selected = 20),
-  
-  sliderInput("bw_adjust", label = "Bandwidth adjustment:",
-              min = 0.2, max = 2, value = 1, step = 0.2)
-)
-
-renderPlot({
-  hist(faithful$eruptions, probability = TRUE, breaks = as.numeric(input$n_breaks),
-       xlab = "Duration (minutes)", main = "Geyser eruption duration")
-  
-  dens <- density(faithful$eruptions, adjust = input$bw_adjust)
-  lines(dens, col = "blue")
-})
+# Remove "---..." vectors:
+tournament <- tournament[!str_detect(tournament,"^-+")]
+head(tournament)
 ```
 
-## Embedded Application
+## Merge and Subset Table
 
-It's also possible to embed an entire Shiny application within an R Markdown document using the `shinyAppDir` function. This example embeds a Shiny application located in another directory:
+We are left with something that could be coerced into a table. However, we still have a big issue: Our individual's performance is split over two consecutive lines. For the scope of this project, we are only concerned with the player's state and pre-rating from the second line, so the other variables will be excluded. Merging the two consecutive lines, the table can be created:
 
-```{r tabsets, echo=FALSE}
-shinyAppDir(
-  system.file("examples/06_tabsets", package = "shiny"),
-  options = list(
-    width = "100%", height = 550
-  )
-)
+```{r mergeCreate}
+# Merge and create a table
+tournament <- str_c(tournament[seq(1,length(tournament),2)], tournament[seq(2,length(tournament),2)])
+tournament <- read.table(text = tournament, sep = "|", stringsAsFactors = FALSE)
+tournament <- subset(tournament, select = c(1:12))
+
+# Isolate player's pre-rating:
+tournament$V12 <- as.numeric(str_extract(tournament$V12, "(?<=R: )\\d+"))
+
+head(tournament)
 ```
 
-Note the use of the `height` parameter to determine how much vertical space the embedded application should occupy.
+## Averaging Opponents Pre-Rating
 
-You can also use the `shinyApp` function to define an application inline rather then in an external directory.
+The number in the variables `V4:V10`, let's call these matches, corresponds to the key of the opponent in `V1`. To average the opponent's pre-rating, the opponent's pre-rating needs to be looked up by their key in the match variable. The pre-ratings will be summed across the matches of `V4:V10` and divided by the number of opponents played.
 
-In all of R code chunks above the `echo = FALSE` attribute is used. This is to prevent the R code within the chunk from rendering in the document alongside the Shiny components.
+```{r avgOppRating}
+#Isolate player key and, if present, lookup pre-rating. Sum accross matches and divide by oppents faced:
+for (player in 1:nrow(tournament)) {
+    opp_sum <- 0
+    count <- 0
+    for (i in c(4:10)) {
+        if (str_detect(tournament[player, i], "[^HUBX]")) {
+            count <- count + 1
+            opp_sum <-
+                opp_sum + tournament$V12[tournament[,1] == str_extract(tournament[player, i],"\\d+")]
+        }
+    }
+    tournament[player, 13] <- round(opp_sum/count,0)
+}
 
+# Subset table in to desired variables and output:
+tournament <- subset(tournament, select = c(2, 3, 11, 12, 13))
+names(tournament) <- c("name", "points", "state", "pre_rating", "avg_opp_pre_rating" )
+```
 
+## Export as .csv and Display Table
 
+If the following code is run, a table of the data in csv format will be on your working directory titled `Byrne_Pro1_Output.csv`. The data, the summation of our labor, is in an interactive format below: 
+
+```{r export_display}
+
+write.csv(tournament, file = "Byrne_Pro1_Output.csv", row.names = TRUE, na = "")
+datatable(tournament)
+```
+
+# Basic Analysis with Structured Data
+
+## Summary Statistics and Distribution
+Now that we have wrangled the data in to a format that R understands, some analysis of the chess tournament is possible. Some basic statistics and the distribution of player ratings are provided below:
+
+```{r sum_Stats}
+summary(tournament[c(2, 4, 5)])
+
+ggplot(tournament, aes(x = tournament$pre_rating)) +
+    geom_histogram(aes(y = ..density..), binwidth = 100, color = "black", fill = "white") +
+    geom_density(alpha = .2, fill = "#FF6666") + labs(title = "Player Rating Distribution", x = "Player's Pre-Rating")
+
+boxplot(tournament$pre_rating, ylab = "Player Pre-Rating")
+```
+
+The data distribution is left-skewed, meaning there were a few low-ranking players in the tournament up against more advanced players. Outside of these  relatively low ranking players, the distribution is fairly normal.
+
+## Analysis of Tournament Points vs. Ratings
+
+It would be interesting to see the points acquired relative to the caliber of opponents faced. Did players win the most points because they were up against low-ranking players, or were they just better? To do this, we will first look at the distribution of the difference in player's ratings relative to points acquired. If  *average opponent's pre-rating - player's pre-rating* is negative, the player was up against weaker players, if positive they were up against stronger players.
+
+```{r Delta_Box}
+rate_diff <- tournament$avg_opp_pre_rating - tournament$pre_rating
+
+summary(rate_diff)
+boxplot(rate_diff)
+```
+
+From the single box plot, it appears that the difference in players ratings during the tournament is relatively evenly distributed about a median close to 0. Overall, players typically faced opponents of the same approximate ratings. Let us drill down a little further and see points earned based off of the difference in ratings.
+
+```{r}
+ggplot(tournament, aes(factor(tournament$points), rate_diff)) + geom_boxplot() + 
+    labs(x = "Points", y = "Average Opponent Rating - Player Rating")
+```
+
+From the box plots, it appears that the players who won less than 3 points were typically up against stronger players and the players who won more than 3 points were matched against weaker players.
+
+Below, we will plot points earned as a function of the difference in ratings of the players. The shaded region corresponds to a 95% confidence interval.
+
+```{r Delta_Function}
+
+ggplot(tournament, aes(x = tournament$avg_opp_pre_rating - tournament$pre_rating, y = tournament$points)) + geom_point() +
+    stat_smooth() + geom_vline(xintercept = 0) +
+    labs(x = "Average of Opponent Ratings - Player Rating", y = "Points")
+```
+
+The polynomial trendline shows a predictive model for guessing the amount of points earned based off the difference in ratings. Not surprisingly, if the player is matched up against weaker players, i.e., rating difference < 0, a greater amount of points would be expected from the tournament. Chess tournaments, like most games, are not set up to pit the best against the best and the weakest against the weakest. It is based off of pre-game standings and the result of each subsequent match, so this should not be a signal of foul play. It does show that the players who, by the structure of tournament rules, managed to face overall weaker players, were more likely to score the most points.
