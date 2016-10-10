@@ -1,0 +1,237 @@
+---
+title: "Preparing Data for Downstream Data Analysis"
+author: "Liam M. Byrne"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::readthedown:
+    highlight: kate
+---
+
+```{r knitr_init, echo = FALSE, include = FALSE}
+library("knitr") 
+library("rmdformats")
+library("data.table")
+library("tidyr")
+library("ggplot2")
+library("dplyr")
+library("DT")
+## Global options
+options(max.print="75")
+opts_chunk$set(cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+***
+# Introduction
+## Overview
+
+The aim of this project is to clean data, transform it in to a "tidy"" state and then perform some analysis. The data chosen, from fellow students' suggestions, are population figures for the United States from the 2010 Census and student alcohol consumption from a school in Portugal.
+
+## Relevence
+
+The three main components of tidy data, outlined by Hadley Wickham in his paper, *[Tidy Data](http://vita.had.co.nz/papers/tidy-data.pdf)* are:
+
+* Each variable forms a column
+* Each observation forms a row
+* Each type of observational unit forms a table
+
+This data structure is a great rule of thumb in order to perform analysis. A lot of data made for human consumption violates these three tenets and is not conducive to computational analysis. Being able to transform this data effectively (in the case of R: using tools such as `dplyr` and `tidyr`) is an ever-present challenge for data scientists.
+
+
+## Libraries
+
+Outside of formatting packages, the libraries used for this project are:
+
+* [`data.table`](https://cran.r-project.org/web/packages/data.table/data.table.pdf): Light-weight, fast development for data structure; not necessarily needed for this data set, but recommended under best practices.   
+* [`dplyr`](https://cran.r-project.org/web/packages/dplyr/dplyr.pdf): For data manipulation.
+* [`tidyr`](https://cran.r-project.org/web/packages/tidyr/tidyr.pdf): To produce tidy data from the `dplyr` pipeline.
+* [`ggplot2`](https://cran.r-project.org/web/packages/ggplot2/ggplot2.pdf): Provides some advanced plotting utilities.
+
+***
+
+# Loading and Cleaning the Data
+## 2010 Census Data
+
+The 2010 census data, suggested by Brandon O'Hara, was released by the U.S Census Bureau on December 2014. The data provides annual estimates of the resident population for the United States, regions, states, and Puerto Rico from April 1, 2010 to July 1, 2014. The raw data, which was cleaned of descriptive attachments and merged cells, is available [here](https://raw.githubusercontent.com/Liam-O/DATA607/master/Project2/populaiton2012.csv). After uploading the data, the ten first observations are:
+
+```{r}
+file_link <- 
+   "https://raw.githubusercontent.com/Liam-O/DATA607/master/Project2/pop2012.csv"
+
+# Returns a data table
+census2010  <- fread(paste(getwd(),"pop2012.csv",sep = "/"), header = TRUE, na.strings = "", data.table = TRUE)
+knitr::kable(head(census2010,10))
+```
+
+The 2010 adjusted and raw variables are adjusted census data from April 2010 and the original data gathered, respectively. The Jul-10 to Jul-14 variables are projections based off the adjusted data. 
+
+From the raw data, shown below, states are preceded by a period. A simple regex expression will remove these:
+
+```{r}
+census2010$area <- sub("^\\.", "", census2010$area)
+
+knitr::kable(head(census2010, 10))
+```
+
+
+The first five rows are calculated rows and should not be in the table. To tabulate them manually, especially the regional areas, would be too cumbersome. They will remain in the table due to their availability.
+
+##Student Drinking
+
+The alcohol consumption for two Portuguese schools ("GP" - Gabriel Pereira or "MS" - Mousinho da Silveira) is available by area of study, [math](https://raw.githubusercontent.com/Liam-O/DATA607/master/Project2/student/student-mat.csv) and [Portuguese](https://raw.githubusercontent.com/Liam-O/DATA607/master/Project2/student/student-por.csv). This data was recommended by Oluwakemi Omotunde and the data dictionary is available [here](https://raw.githubusercontent.com/Liam-O/DATA607/master/Project2/student/student.txt)
+
+```{r}
+#Data for math students
+st_math_link <- "https://raw.githubusercontent.com/Liam-O/DATA607/master/Project2/student/student-mat.csv"
+student_math <- fread(st_math_link, header = TRUE, na.strings = "", data.table = TRUE)
+knitr::kable(head(student_math))
+
+#Data for Portuguese students
+st_port_link <- "https://raw.githubusercontent.com/Liam-O/DATA607/master/Project2/student/student-por.csv"
+student_port <- fread(st_port_link, header = TRUE, na.strings = "", data.table = TRUE)
+
+student_port$sex <- sub("0", "F", student_port$sex)
+
+knitr::kable(head(student_port))
+```
+
+Due to the behavior of `fread`, `sex` was coerced into logical values for the first couple of rows. This error was handles by the regex expression above.
+
+#Transform to Tidy Data
+##2010 Census Data
+
+The format of the census data violates the rule that each observation forms a row. The time series format puts the population projections for July 2010 to July 2014 in one row. Also, the 2010 raw data will not be necessary in our future analysis, so we will remove this as well. By piping the data through some `tidyr` tools we get the desired result:
+
+```{r}
+census2010 <- census2010 %>%
+    gather("year", "pop", 4:8) %>%
+    subset(select = c(1,2,4,5)) %>%
+    arrange(area)
+
+census2010$census_2010 <- as.numeric(gsub(",", "", census2010$census_2010))
+census2010$pop <- as.numeric(gsub(",", "", census2010$pop))
+knitr::kable(head(census2010,10))
+```
+
+Due to the formatting of the data, population values are strings. The regex and casting above coerces the values in to numeric values.
+
+##Student Drinking
+
+The issue with the student data is that it is split over two tables depending on what class the student is taking, i.e. math or Portuguese. These tables need to be joined under one table.
+```{r}
+# Add major variable to distinguish between 
+student_math[,"major"] <- "math"
+student_port[,"major"] <- "Portuguese"
+
+student <- rbind(student_math, student_port)
+
+# Size of nearly formed table
+nrow(student)
+
+```
+
+All the data is combined under the one table, `student`, with an added variable of major to distinguish between the students in the respective field of study.
+
+# Analysis with Transformed Data
+##Census Data
+
+The projected population growths by region was a recommended area to look in to. The plot below shows the population projection form July, 2010 to July 2011 for the respective regions.
+```{r}
+census_region <- filter(census2010,
+                        area == "Northeast" |
+                            area == "Midwest" |
+                            area == "South" |
+                            area == "West")
+
+
+ggplot(census_region, aes(x = year, y = pop)) +
+    geom_point(size = 3, aes(color = area))
+```
+    
+All the rates for population seem to be positive, or at least flat between years. The region with the largest growth is the south. The regional growth is not surprising, but the population differences going on the state level could be drowning out the behavior for the region. Let us look at the differences in the projected population in 2014 relative to the 2010 Census data and look at the largest population growth and the smallest.
+```{r}
+census_diff <- filter(census2010, year == "14-Jul" &
+                          area != "Northeast" &
+                          area != "Midwest" &
+                          area != "South" &
+                          area != "West" &
+                          area != "United States") %>%
+    mutate(pop_growth = pop - census_2010) %>%
+    select(area, pop_growth) %>%
+    arrange(-pop_growth)
+
+# Largest growth
+knitr::kable(head(census_diff))
+
+# Smallest growth
+knitr::kable(tail(census_diff))
+
+```
+
+Texas, California and Florida have the largest population growth and Puerto Rico, West Virginia and Vermont has the least growth. There are many interesting topics that one could dive into form these observations. For the large gains, Is Texas there because of immigration, is California there because of the tech-boom, is Florida there because of baby-boomers retiring? For the lowest ,on the other hand, is Puerto Rico there because of their poor economic situation, is West Virginia there because of the decline of the the coal mines and job prospects?
+
+If you are curious how other states fared. Took a look at the interactive table below.
+```{r}
+datatable(census_diff)
+```
+
+##Student Drinking
+
+The relationship to alcohol consumption and the setting one lives in, i.e. rural (*R*) vs urban (*U*), was brought up by the student who requested this data. In order to do some analysis, the student's semester grades will be averaged, `grade_avg` and the level of drinking the student participated in during the weekday and weekend is added into one variable, `alc_sum`. These variables will be formed by using `tidyr` tools to operate on through the `dplyr` pipeline. 
+```{r}
+student <- student %>%
+    mutate(grade_avg = (G1 + G2 + G3)/3) %>%
+    mutate(alc_sum = (Dalc+Walc)) %>%
+    select(school, sex, address, alc_sum, major, grade_avg)
+```
+
+The summary statistics for drinking behavior (on a scale from 2 to 10, with 10 being the heaviest consumption) for the rural students is:
+
+```{r}
+# Summary for rural students
+summary(student$alc_sum[student$address == "R"])
+```
+
+And for the urban student it is:
+
+```{r}
+# Summary for urban students
+summary(student$alc_sum[student$address == "U"])
+```
+
+These summary statistics do not bring much insight. Yes, the average consumption for the rural student is more, but the remainder of the statistics are the same. We will plot the density to see if it brings any insights.
+```{r}
+ggplot(student, aes(alc_sum)) +
+    geom_density(fill = "grey") + facet_wrap(~ address)
+```
+
+From the density plot, it does appear that the percentage of rural (*R*) students drink more than urban (*U*) students. This is evident from the sharp, uni-modal point at `alc_sum = 2` for the urban students and its shallow spread to the right. The rural student's density has a nearly linear spread and is not as sharply concave as their fellow urban classmates' density.
+
+It is apparent that the rural students do consume more alcohol, but let us see if this has any relationship to performance at school. Using summary statistics again on the average semester grade, `grade_avg`:
+```{r}
+# Summary for rural students
+summary(student$grade_avg[student$address == "R"])
+```
+
+And for the urban student it is:
+```{r}
+# Summary for urban students
+summary(student$grade_avg[student$address == "U"])
+```
+
+From the summary statistics, it is clear that the urban (*U*) students outperform their rural (*R*) classmates.
+
+Since the urban students drink less and outperform their counterparts, is it safe to assume that they do because they drink less alcohol on average during the week? It most definitely does not; correlation does imply causation. To dive in a little further, let us see if there is a clear correlation between the two types of students given the variables discussed above using boxplots.
+```{r}
+ggplot(student, aes(factor(alc_sum), grade_avg)) +
+    geom_boxplot() + facet_wrap(~ address)
+```
+
+Strictly looking at the urban (*U*) student, there is a clear negative relationship between large alcohol consumption and grades. Looking at the rural (*R*) students, however, there is no clear relationship. Correlation may not imply causation, but no correlation does imply no causation.
+
+There are a lot of mitigating factors in the student dataset that could be effecting the performance of the rural students. Since there could be less mitigating factors for urban students, factors such as alcohol consumption may have a stronger effect on school performance. Factors such as levels of the parents' education and stressful environments at home due to economic conditions may have a larger impact, but it does not appear to be due to alcohol.
