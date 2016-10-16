@@ -1,0 +1,49 @@
+---
+title: "Data607 - HW 7"
+author: "Liam Byrne"
+date: "October 16, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Reading HTML and XML objects
+library("XML")
+#Reading json objects
+library("jsonlite")
+#for getURL()
+library("RCurl")
+```
+
+***
+
+##Introduciton
+
+The assignment envolved creating tables of our favorite books in HTML, XML and json format. A few books on my shelf that have some meanng to me are Bill Bryson's *A Short History of Nearly Everything*, Stephen Hawking's *A Brief History of Time: From the Big Bang to Black Holes* and one of my first programming books, *Data Structures and Other Objects Using C++* by Michael Main and Walter Savitch.
+
+##Relevance
+
+Data from the web can be in a wide array of formats, e.g., csv, HTML, XML and json. Being able to handle data from different sources and be able to coerce it into a table within R should be a fundamental skill.
+
+***
+
+###HTML
+
+The 
+```{r readHTML}
+book_html_link <- getURL("https://raw.githubusercontent.com/Liam-O/DATA607/master/HW7/books.html")
+
+books_html <- readHTMLTable(book_html_link,
+                            header = TRUE,
+                            which = 1)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
