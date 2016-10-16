@@ -19,7 +19,6 @@ library("DT")
 options(max.print="75")
 opts_chunk$set(cache=TRUE,
                prompt=FALSE,
-               tidy=TRUE,
                comment=NA,
                message=FALSE,
                warning=FALSE)
@@ -61,10 +60,10 @@ The 2010 census data, suggested by Brandon O'Hara, was released by the U.S Censu
 
 ```{r}
 file_link <- 
-   "https://raw.githubusercontent.com/Liam-O/DATA607/master/Project2/pop2012.csv"
+  "https://raw.githubusercontent.com/Liam-O/DATA607/master/Project2/pop2012.csv"
 
 # Returns a data table
-census2010  <- fread(paste(getwd(),"pop2012.csv",sep = "/"), header = TRUE, na.strings = "", data.table = TRUE)
+census2010  <- fread(file_link, header = TRUE, na.strings = "", data.table = TRUE)
 knitr::kable(head(census2010,10))
 ```
 
@@ -102,6 +101,18 @@ knitr::kable(head(student_port))
 
 Due to the behavior of `fread`, `sex` was coerced into logical values for the first couple of rows. This error was handles by the regex expression above.
 
+##Stop and Frisk
+
+In metropolitan areas, namely [New York City](https://en.wikipedia.org/wiki/Stop-and-frisk_in_New_York_City), stop and frisk has become a divisive practice since its ramp-up at the turn of the century. Some have lauded its effectiveness and others have scrutinized its unfair focus on young, minority men. Answering such things is beyond the scope of this assignment, but there are some interesting observations that can be garnered. The NYPD keeps a a log of stop and frisk data between [2003 and 2015](http://www.nyc.gov/html/nypd/html/analysis_and_planning/stop_question_and_frisk_report.shtml) with a "wide" list of variables. The data dictionary is available for download [here](http://www.nyc.gov/html/nypd/downloads/excel/analysis_and_planning/2015_sqf_file_spec.xlsx). The data for the stop and frisk practice in NYC is loaded below:
+```{r snfUpload}
+file_link <- 
+   "https://raw.githubusercontent.com/Liam-O/DATA607/master/Project2/stopNfrisk/2015snf.csv"
+
+# Returns a data table
+snf2015  <- fread(file_link, header = TRUE, na.strings = " ", data.table = TRUE)
+knitr::kable(head(snf2015,10))
+```
+
 #Transform to Tidy Data
 ##2010 Census Data
 
@@ -137,7 +148,54 @@ nrow(student)
 
 All the data is combined under the one table, `student`, with an added variable of major to distinguish between the students in the respective field of study.
 
-# Analysis with Transformed Data
+##Stop and Frisk
+
+The stop and frisk data is not necessarily "untidy" in the sense that it violates any of the components mentioned in the introduction, but it could become more structured for analysis with the tools supplied in `dplyr` and `tidyr`. We want to specify and/or generalize some data; namely:
+
+* Generalize precinct names into boroughs.
+* Isolate observations where an individual was stopped and frisked
+* Specify *reason for stop* and\or *reason for frisk* into two variables (multiple reasons allowed).
+* Generalize "found" items to be: `firearm`, `non-firearm weapon` or `contraband` (most severe case overrides others, if applicable)
+* Generalize type of `force` applied into `lethal`, `non-lethal` or `none: lethal = gun or baton; non-lethal = physical force; else = none.
+
+This will morph the wide dataset (22563 x 113) into a long dataset (529320 x 7). 
+```{r snf_tidy}
+
+snf2015 <- snf2015 %>%
+    # Generalize police borough
+    mutate(pol_borough = ifelse(
+        pct %in% 0:34, "ManH", ifelse(
+            pct %in% 35:52, "Bronx", ifelse(
+                pct %in% 53:94, "BK", ifelse(
+                    pct %in% 95:115, "Qns", ifelse(
+                        pct %in% 116:123, "StnI", "other")))))) %>%
+    # Generalize "stop"
+    gather(stop_reason, stop_applicable, 
+           c(49:52, 54, 55, 58, 62:64)) %>%
+    # Generalize "frisk"
+    gather(frisk_reason, frisk_applicable,
+           c(rf_vcrim, rf_othsw, rf_attir, rf_vcact, rf_rfcmp,
+             rf_verbl, rf_knowl, rf_furt, rf_bulg)) %>%
+    # Isolate reasons for "stop" and\or "frisk"
+    subset(stop_applicable == "Y" | frisk_applicable == "Y") %>%
+    # Generalize "found" items
+    mutate(found = ifelse(
+        pistol == "Y" | riflshot == "Y" | asltweap == "Y"|
+            machgun == "Y", "firearm", ifelse(
+                knifcuti == "Y" | othrweap == "Y",
+                "non-firearm_weapon", ifelse(
+                    contrabn == "Y", "contraband","none")))) %>%
+    #Generalize force used
+    mutate(force = ifelse(
+        pf_drwep == "Y" | pf_ptwep == "Y" | pf_baton == "Y", "lethal", ifelse(
+            pf_hands == "Y" | pf_wall == "Y" | pf_grnd == "Y" | pf_hcuff == "Y" |
+                pf_pepsp == "Y" | pf_other == "Y", "non-lethal", "none"))) %>%
+    select(pol_borough, stop_reason, frisk_reason, found, force, forceuse, arstmade)
+
+knitr::kable(head(snf2015,10))
+```
+
+#Analysis with Transformed Data
 ##Census Data
 
 The projected population growths by region was a recommended area to look in to. The plot below shows the population projection form July, 2010 to July 2011 for the respective regions.
@@ -235,3 +293,53 @@ ggplot(student, aes(factor(alc_sum), grade_avg)) +
 Strictly looking at the urban (*U*) student, there is a clear negative relationship between large alcohol consumption and grades. Looking at the rural (*R*) students, however, there is no clear relationship. Correlation may not imply causation, but no correlation does imply no causation.
 
 There are a lot of mitigating factors in the student dataset that could be effecting the performance of the rural students. Since there could be less mitigating factors for urban students, factors such as alcohol consumption may have a stronger effect on school performance. Factors such as levels of the parents' education and stressful environments at home due to economic conditions may have a larger impact, but it does not appear to be due to alcohol.
+
+##Stop and Frisk
+
+First we will look at a plot of the stop and frisk rates for the respective boroughs and then a plot of the reason the individual was stopped.
+```{r}
+ggplot(snf2015, aes(factor(pol_borough))) + geom_bar()
+ggplot(snf2015, aes(factor(pol_borough), fill = stop_reason)) + geom_bar(position = "dodge")
+```
+
+For the reasons of being stopped above, let us see what was the result of the search, i.e., was anything found.
+```{r}
+ggplot(snf2015, aes(factor(pol_borough),fill = found)) + geom_bar(position = "dodge")
+count(snf2015,found)
+```
+
+It is obvious that nothing was found from most of these stops; there is a *found* rate of `r (1 - as.numeric(count(snf2015,found)[4,2])/nrow(snf2015))*100`%. Let us see the times when something was actually found from these stops based off the reason for search. Also, let's see what the the highest success rate of finding something based off the stop.
+
+```{r stop}
+ggplot(subset(snf2015, found != "none"), aes(factor(stop_reason), fill = found)) + geom_bar(position = "dodge")
+
+snf_table <- as.data.frame.matrix(table(snf2015$stop_reason, snf2015$found))
+snf_names <- rownames(snf_table)
+snf_table <- snf_table %>%
+    mutate(success = rowSums(snf_table[,1:3])/rowSums(snf_table)) %>%
+    mutate(freq_rank = frank(-rowSums(snf_table))) %>%
+    arrange(-success)
+rownames(snf_table) <- snf_names
+knitr::kable(snf_table)
+```
+
+The above table is sorted by the level of success. `freq_rank` is the rank for how often that that is the reason for the stop. It is important to point out that the most common reasons for stops, e.g., other, furtive behavior and matches a description have a lower success rate for finding something than an observed bulge, casing an area or clothing.
+
+Let us see if the reason for frisking, carried out after the stop, has the same behavior:
+
+```{r}
+ggplot(subset(snf2015, found != "none"), aes(factor(frisk_reason), fill = found)) + geom_bar(position = "dodge")
+
+snf_table <- as.data.frame.matrix(table(snf2015$frisk_reason, snf2015$found))
+snf_names <- rownames(snf_table)
+snf_table <- snf_table %>%
+    mutate(success = rowSums(snf_table[,1:3])/rowSums(snf_table)) %>%
+    mutate(freq_rank = frank(-rowSums(snf_table))) %>%
+    arrange(-success)
+rownames(snf_table) <- snf_names
+knitr::kable(snf_table)
+```
+
+The reason for frisking does not follow the same behavior; 2 of the top 3 frequencies have the highest `success` rate.
+
+From the data above, it appears that stop and frisk has about a 10% success rate. The most common reasons for stopping appear arbitrary and do not yield as large as a success rate as those which are more concrete. A trade-off for the NYPD might be to fore-go some of the low-success, vague reasons for stopping individuals to gain a better relationship in the neighborhoods in which they are.
