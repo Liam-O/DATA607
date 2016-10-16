@@ -1,0 +1,26 @@
+<books>
+	<book>
+		<bookID>1</bookID>
+		<title>A Short History of Nearly Everything</title>
+		<author>Bill Bryson</author>
+		<ISBN-13>978-0767908184</ISBN-13>
+		<Edition>1</Edition>
+		<Pages>544</Pages>
+	</book>
+	<book>
+		<bookID>2</bookID>
+		<title>A Brief History of Time: From the Big Bang to Black Holes</title>
+		<author>Stephen Hawking</author>
+		<ISBN-13>978-0553053401</ISBN-13>
+		<Edition>1</Edition>
+		<Pages>198</Pages>
+	</book>
+	<book>
+		<bookID>3</bookID>
+		<title>Data Structures and Other Objects Using C++</title>
+		<author>Micahel Main, Walter Savitch</author>
+		<ISBN-13>978-0132129480</ISBN-13>
+		<Edition>4</Edition>
+		<Pages>848</Pages>
+	</book>
+</books>

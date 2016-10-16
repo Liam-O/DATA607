@@ -1,0 +1,8 @@
+{
+"bookID": [1, 2, 3],
+"Title": ["A Short History of Nearly Everything", "A Brief History of Time: From the Big Bang to Black Holes", "Data Structures and Other Objects Using C++"],
+"Author" :["Bill Bryson", "Stephen Hawking", ["Micahel Main", "Walter Savitch"]],
+"ISBN-13" :["978-0767908184", "978-0553053401", "978-0132129480"],
+"Edition": [1, 1, 4],
+"Pages": [544, 198, 848]
+}
