@@ -1,0 +1,78 @@
+---
+title: "Data 607 Week 9"
+author: "Liam Byrne"
+date: "October 30, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library("RJSONIO") #Convert from json -> data frame
+library("jsonlite") # for rbind.pages (combine list of data.frames into a data.frame)
+library("RCurl") # for GetURL
+library("DT") #interactive table -> datatable()
+library("ggplot2") #advanced graphics
+
+api_key <- "5f4ff2704f8b49ea8b4ed3339d517412"
+
+```
+
+##Introduciton
+
+This assignment involves using the *New York Times* web API to construct an interface in R to read in the JSON data and transform it into a an R data frame.
+
+##Relevance
+
+Data from news sources is constantly being updated and being able to extract information skillfully and quickly can only pay dividends in the data science field.
+*****
+
+The *Times API* used is for article searches, which enables one to search for articles from September 18,1851 up to the present date. The public API specs for the article search are available [here](https://github.com/NYTimes/public_api_specs/blob/master/article_search/article_search_v2.md). Using the exact search term `data science`, we use the API to search for articles, with the query term in the headline or body. Some surgery was needed due to some of the json objects being nested. The queried results are attached in the data frame below.
+
+```{r readNYT}
+
+q <- "%22data+science%22" # query term to search for
+results <- 500 #number of articles to get
+page_range <- 0:(results/10-1) # 10 results per page.
+
+fields <- c("headline", "web_url", "abstract", "pub_date")
+
+base_uri <- "http://api.nytimes.com/svc/search/v2/articlesearch.json"
+
+art_list <- list()
+for (i in page_range) {
+    uri <- paste0(
+        base_uri,
+        "?q=", q,
+        "&page=", i,
+        "&sort=", "newest",
+        "&fl=", paste(fields, collapse = ","),
+        "&api-key=", api_key)
+    
+    tmp <- fromJSON(getURL(uri))
+    
+    # break if no more results from pages
+    if (length(tmp$response$docs) == 0) {
+        break()
+    }
+    # else remove nested list from headlines and only retain `main`
+    else {
+        tmp$response$docs$headline <- tmp$response$docs$headline$main
+        }
+    art_list[[i+1]] <- tmp$response$docs
+    
+    # smaller sleep values seemed to return errors w/ API even though limit is 5/sec (0.2)
+    Sys.sleep(1)
+}
+
+# Combine returned pages into one data frame.
+articles <- rbind.pages(art_list)
+
+datatable(articles)
+```
+
+The search term only returned `r i` pages with `r nrow(articles)` articles. To look at the prevalence of the field of data science, under the news publication whose motto is "All the News That's Fit to Print", we will graph its *cumilative* usage in articles.
+```{r warning=FALSE}
+articles$pub_date <- as.Date(gsub("T.*", "", articles$pub_date))
+ggplot(articles,aes(x=pub_date)) +stat_bin(aes(y = cumsum(..count..)),binwidth = 1)
+```
