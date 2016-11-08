@@ -1,10 +1,215 @@
 ---
-title: "Data 607 - Week 10"
+title: "Data 607 - Week 10: Document Classification"
 author: "Liam Byrne"
-date: "November 6, 2016"
+date: "November 5, 2016"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+##Abstract
+
+This assignment looks at email collections tagged as either "spam" or "ham", i.e., non-spam. and the training methods used in order to establish an appropriate spam filtering method. Three models are used in the training\\testing process: simple vector machines (SVM), random forest (TREE) and maximum entropy (MAXENT).
+
+It was found that the MAXENT model is the most accurate in predicting spam (~96/100 spam emails captured) and should be used in the implementation of a spam filter.
+
+The corpa used here-in are available [here](https://spamassassin.apache.org/publiccorpus/)
+
+##Relevance
+
+Being, at the very least, literate in document classification is paramount in any analytically field that deals with data that is not served up clean on a platter. Not only is literacy important, but probably of equal or ore important value are  the methods of obtaining proper classification, e.g.,  partitioning data into training and "hold-out" sets to get relevant, non-over-fit models. The methods here-in accomplish such.
+
+```{r loadPackages, warning = FALSE}
+# NOTE: WARNING SET TO FALSE ON CHUNK FOR PACKAGE CALLS
+
+# For Text Mining functions, e.g. corpus, tm_map
+if(!require('tm')) {
+    install.packages('tm')
+    library('tm')
+}
+# For container creation
+if(!require('RTextTools')) {
+    install.packages('RTextTools')
+    library('RTextTools')
+}
+```
+
+The email corpa must be downloaded and unzipped from the following sources in the chunk and be downloaded to your working directory if you wish to run the code; `big sigh`.
+
+```{r create_corpus}
+# Ham zip (20021010 from /publiccorpus) available from
+# https://github.com/Liam-O/DATA607/blob/master/HW10/easy_ham.zip
+ham_corp <- Corpus(DirSource("easy_ham"))
+
+# Spam zip (20021010 from /publiccorpus) available from
+# https://github.com/Liam-O/DATA607/blob/master/HW10/spam.zip
+spam_corp <- Corpus(DirSource("spam"))
+
+# tag to track mail as spam or ham
+meta(ham_corp, "label") <- "ham"
+meta(spam_corp, "label") <- "spam"
+
+# combine all into corpus
+corp <- c(ham_corp, spam_corp, recursive = TRUE)
+```
+
+The email corpus is raw and needs to go through a basic cleaning process. Since there are a whole host of strings that appear in emails, we will simplify things (hopefully not too greatly) by just dealing with character strings. Any string of characters longer than 29 (the longest non-coined and nontechnical word in the dictionary is 28 letters- Antidisestablishmentarianism) was replaced with "\_VeryLongWord\_" so the long strings can at least be tracked. 
+
+```{r clean_corpus}
+# Remove
+corp <- tm_map(
+    corp,
+    content_transformer(gsub),
+    pattern = "\\w*[[:punct:]]+\\w+|[[:space:]]+|\\w*\\d+\\w*|[^[:alnum:]]",
+    replace = " "
+    )
+
+corp <- tm_map(
+    corp, content_transformer(gsub),
+    pattern = "[[:alnum:]]{29,}",
+    replace = "_VeryLongWord_"
+    )
+
+# Remove excessive whitespace
+corp <- tm_map(corp, stripWhitespace)
+# Convert to lower
+corp <- tm_map(corp, content_transformer(tolower))
+# Remove Stopwords
+corp <- tm_map(corp, removeWords, stopwords())
+# Stem words
+corp <- tm_map(corp, stemDocument)
+corp <- tm_map(corp, PlainTextDocument)
+```
+
+The following methods will "shuffle" the corpus, in terms of ham or spam, and create a document-term-matrix for the terms within the emails.
+
+```{r}
+# Randomize corpus
+corp <- sample(corp)
+# Create DTM and Check sparsity
+(corp_dtm <- DocumentTermMatrix(corp))
+```
+
+Even after removing a lot of the junk strings and punctuation the term matrix is still very sparse (~99%). 
+
+Trimming away the spareness of the matrix should not affect the accuracy of the model (running it "as is" causes a protection stack overflow error), so any terms that appear only once in the one document will be removed.
+
+```{r}
+# Removes terms appearing only once
+corp_dtm <- removeSparseTerms(corp_dtm, 1 - (1/length(corp)))
+```
+
+The following code builds a container for the "test" and the "hold-out" data. The test data will be 75% of the corpus (a proper hold-out size is beyond the scope of this assignment). 
+
+```{r container}
+mail_type <- unlist(meta(corp,"label"))
+corp_n <- length(mail_type)
+
+mail_container <- create_container(
+        corp_dtm,
+        labels = mail_type,
+        trainSize = 1:(floor(3/4*corp_n)),
+        testSize = (floor(3/4*corp_n)+1):corp_n,
+        virgin = FALSE
+        )
+```
+
+The training data is passed through three different training algorithms (note abstract) and these same trained algorithms are then used to predict the spam\\ham status of the "hold-off" set.
+
+```{r models}
+t_models <- train_models(mail_container, algorithms = c("SVM", "TREE", "MAXENT"))
+c_models <- classify_models(mail_container, t_models)
+```
+
+We can now gauge the accuracy of the our spam filter by constructing a table for comparisons.
+
+```{r}
+labels_out <- data.frame(
+    correct_label = mail_type[floor(3/4*corp_n)+1:corp_n],
+    svm = as.character(c_models$SVM_LABEL),
+    tree = as.character(c_models$TREE_LABEL),
+    maxent = as.character(c_models$MAXENTROPY_LABEL)
+)
+
+model_acc <- data.frame(
+    svm = prop.table(table(labels_out[,1] == labels_out[,2]))[2],
+    tree = prop.table(table(labels_out[,1] == labels_out[,3]))[2],
+    maxent = prop.table(table(labels_out[,1] == labels_out[,4]))[2]
+    )
+rownames(model_acc) <- "Accuracy"
+knitr::kable(model_acc)
+```
+
+From the output above, it appears that the model could be over-fit due to all the algorithms achieving almost 100% accuracy even though we withheld 25% as training data. We can use the model that we obtained from this procedure and apply it to another corpus to get a better gauge of the accuracy of the filter; namely a second corpus of entirely spam emails.
+
+We can repeat what we did above as far as reading and cleaning the data, but we need to use the same list of terms from  the original corpus document term matrix because that is what the training algorithms were built from.
+
+```{r}
+spam2_corp <- Corpus(DirSource("spam_2"))
+meta(spam_corp, "label") <- "non-tagged"
+
+# Clean courpus
+# Remove non-char strings
+spam2_corp <- tm_map(
+    spam2_corp, content_transformer(gsub),
+    pattern = "\\w*[[:punct:]]+\\w+|[[:space:]]+|\\w*\\d+\\w*|[^[:alnum:]]",
+    replace = " ")
+# Substitue long words.
+spam2_corp <- tm_map(spam2_corp, content_transformer(gsub),
+                     pattern =
+                         "[[:alnum:]]{29,}",
+                     replace = "_VeryLongWord_")
+
+# Remove excessive whitespace
+spam2_corp <- tm_map(spam2_corp, stripWhitespace)
+# Convert to lower
+spam2_corp <- tm_map(spam2_corp, content_transformer(tolower))
+# Remove Stopwords
+spam2_corp <- tm_map(spam2_corp, removeWords, stopwords())
+# Stem words
+spam2_corp <- tm_map(spam2_corp, stemDocument)
+spam2_corp <- tm_map(spam2_corp, PlainTextDocument)
+
+# Randomize corpus
+spam2_corp <- sample(spam2_corp)
+
+# Must use the same terms from the original corpus
+spam2_dtm <- DocumentTermMatrix(spam2_corp, control = list(dictionary = findFreqTerms(corp_dtm)))
+
+# This time the data, as far as the container is concerned is virgin, i.e., unclassified.
+test_container <- create_container(
+        spam2_dtm,
+        labels = matrix(nrow = nrow(spam2_dtm)),
+        testSize = 1:nrow(spam2_dtm),
+        virgin = TRUE)
+
+# Using the training models built from above, we pass
+# 100% spam through the classificaiton model.
+test_out <- classify_models(test_container, t_models)
+```
+
+Now we build a new comparison data frame to see how we did with the "virgin" data:
+
+```{r}
+test_labels_out <- data.frame(
+    svm = as.character(test_out$SVM_LABEL),
+    tree = as.character(test_out$TREE_LABEL),
+    maxent = as.character(test_out$MAXENTROPY_LABEL),
+    stringsAsFactors = TRUE
+)
+
+test_acc <- data.frame(
+    svm = prop.table(table(test_labels_out[,1] == "spam"))[2],
+    tree = prop.table(table(test_labels_out[,2] == "spam"))[2],
+    maxent = prop.table(table(test_labels_out[,3] == "spam"))[2]
+    )
+
+rownames(test_acc) <- "Accuracy"
+knitr::kable(test_acc)
+```
+
+### Conclusion
+
+From the output above, if I were to implement a spam filter for this particular email service, I would go with the `MAXENT` model to use for my filter. Allowing ~5/100 spam emails through is deemed acceptable given the limited corpa. With the ability of users to "flag" emails as spam, tentative training sets could evolve and become more accurate.
