@@ -9,11 +9,13 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+***
+
 ##Abstract
 
 This assignment looks at email collections tagged as either "spam" or "ham", i.e., non-spam. and the training methods used in order to establish an appropriate spam filtering method. Three models are used in the training\\testing process: simple vector machines (SVM), random forest (TREE) and maximum entropy (MAXENT).
 
-It was found that the MAXENT model is the most accurate in predicting spam (~96/100 spam emails captured) and should be used in the implementation of a spam filter.
+It was found that the MAXENT model is the most accurate in predicting spam and should be used in the implementation of a spam filter.
 
 The corpa used here-in are available [here](https://spamassassin.apache.org/publiccorpus/)
 
@@ -21,8 +23,10 @@ The corpa used here-in are available [here](https://spamassassin.apache.org/publ
 
 Being, at the very least, literate in document classification is paramount in any analytically field that deals with data that is not served up clean on a platter. Not only is literacy important, but probably of equal or ore important value are  the methods of obtaining proper classification, e.g.,  partitioning data into training and "hold-out" sets to get relevant, non-over-fit models. The methods here-in accomplish such.
 
-```{r loadPackages, warning = FALSE}
-# NOTE: WARNING SET TO FALSE ON CHUNK FOR PACKAGE CALLS
+***
+
+```{r loadPackages, message = FALSE, warning = FALSE}
+# NOTE: MESSAGE\WARNING SET TO FALSE ON CHUNK FOR PACKAGE CALLS
 
 # For Text Mining functions, e.g. corpus, tm_map
 if(!require('tm')) {
@@ -85,7 +89,7 @@ corp <- tm_map(corp, PlainTextDocument)
 
 The following methods will "shuffle" the corpus, in terms of ham or spam, and create a document-term-matrix for the terms within the emails.
 
-```{r}
+```{r rando_dtm}
 # Randomize corpus
 corp <- sample(corp)
 # Create DTM and Check sparsity
@@ -125,7 +129,7 @@ c_models <- classify_models(mail_container, t_models)
 
 We can now gauge the accuracy of the our spam filter by constructing a table for comparisons.
 
-```{r}
+```{r trained_out}
 labels_out <- data.frame(
     correct_label = mail_type[floor(3/4*corp_n)+1:corp_n],
     svm = as.character(c_models$SVM_LABEL),
@@ -146,7 +150,9 @@ From the output above, it appears that the model could be over-fit due to all th
 
 We can repeat what we did above as far as reading and cleaning the data, but we need to use the same list of terms from  the original corpus document term matrix because that is what the training algorithms were built from.
 
-```{r}
+```{r test_repeat}
+# spam_2 zip (20030228 from /publiccorpus) available from
+# https://github.com/Liam-O/DATA607/blob/master/HW10/spam_2.zip
 spam2_corp <- Corpus(DirSource("spam_2"))
 meta(spam_corp, "label") <- "non-tagged"
 
@@ -192,7 +198,7 @@ test_out <- classify_models(test_container, t_models)
 
 Now we build a new comparison data frame to see how we did with the "virgin" data:
 
-```{r}
+```{r test_labels}
 test_labels_out <- data.frame(
     svm = as.character(test_out$SVM_LABEL),
     tree = as.character(test_out$TREE_LABEL),
@@ -212,4 +218,4 @@ knitr::kable(test_acc)
 
 ### Conclusion
 
-From the output above, if I were to implement a spam filter for this particular email service, I would go with the `MAXENT` model to use for my filter. Allowing ~5/100 spam emails through is deemed acceptable given the limited corpa. With the ability of users to "flag" emails as spam, tentative training sets could evolve and become more accurate.
+From the output above, if I were to implement a spam filter for this particular email service, I would go with the `MAXENT` model to use for my filter. Allowing ~`r ceiling(100*(1 - prop.table(table(test_labels_out[,3] == "spam"))[2]))`/100 spam emails through is deemed acceptable given the limited corpa. With the ability of users to "flag" emails as spam, tentative training sets could evolve and become more accurate.
