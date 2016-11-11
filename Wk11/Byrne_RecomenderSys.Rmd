@@ -1,0 +1,50 @@
+---
+title: 'Week 11: Recommender Systems'
+author: "Liam Byrne"
+date: "November 10, 2016"
+output:
+    html_document:
+        theme: simplex
+        highlight: textmate
+        toc:  true
+        toc_float: true
+        code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+* * *
+
+# Assignment
+
+Analyze an existing recommender system and *(1)* elaborate on its scenario design, *(2)* reverse engineer from the outside and *(3)* make improvement recommendations.
+
+#### Flipboard
+
+Flipboard aggregates news feeds, social media, photo sharing sites and similar sites and presents the media in a sleek "flippable" magazine format. Through its application, users can follow topics, publications or their friends' social media feeds. I became familiar with the news aggregation apps through the much older *Zite*, who Flipboard apparently acquired not too long ago and apparently uses (portions a least) its recommender system.
+
+# Scenario Design Analysis
+
+#### Who are Flipboard's target users?
+
+Flipboard is aimed at users who: want to read and share articles about specific subject matters; read what others are reading, e.g. friends or those that they *follow*; want their social media feeds aggregated under one roof; may have a short attention span and want to dive in and out of varied content.
+
+#### What are Flipboard's key goals?
+
+The aim of Flipboard is to create a one-stop platform for the most popular content on the internet, e.g. social media feeds and articles of interest. With the limitless content out there, Flipboard wants to make the topics and mediums that the user is likely to consume and be interested in to be available on their main dash\\flip-board.
+
+#### How does Flipboard accomplish this goal?
+
+The way that Flipboard accomplishes this aggregation and display of tailored content is by noting which content the user *follows*, the articles user *likes* and the *magazines* that the user shares or consumes.
+
+# Reverse Engineer Flipboard
+
+The interface of Flipboard and the way it presents media from multiple sources that the user can seamlessly *flip* through is what really makes the UX. The behind the scenes algorithms that present the tailor-made content could use things such as key-word pairing and cluster analysis based off of the text of articles that the user *like* or the types of articles that others with similar interests like
+
+For instance, a training model would need to be made to mine keywords that appear in articles that the user gives a positive sentiment to. The mining process could find that, for example, articles that are read about data analysis sometimes include reference to things like R, Python or or data mining may give articles that contain such keywords greater weight. In the same line of thinking, content that has been tagged as R, Python or data mining may be recommended to the user.
+
+# Some Flaws with Flipboard
+
+Flipboard seems to deal with large media outlets and is limited to the publications that are willing to share their work, e.g., the New York Times has a limited agreement with them to only share certain content. Also, a lot of its sources seem to weigh heavily on what is trending on social media or other outlets. As a reader, I would want more focus paid to content over what major publications are printing or what is tending on Twitter. It is possible to minimize this by interacting with the app, following\\liking content from more obscure sources or not allowing Flipboard access to your social media.
