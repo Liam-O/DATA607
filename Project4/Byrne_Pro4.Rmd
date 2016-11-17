@@ -1,0 +1,127 @@
+---
+title: 'Project 4'
+author: "Liam Byrne"
+date: "November 10, 2016"
+output:
+    html_document:
+        theme: simplex
+        highlight: textmate
+        toc:  true
+        toc_float: true
+        code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+
+# To connect and pull from MySQL
+if(!require("RMySQL", character.only = TRUE, quietly = TRUE)) {
+    install.packages("RMySQL")
+    library("RMySQL", character.only = TRUE)
+}
+
+# To connect and push to MongoDB
+if(!require("mongolite", character.only = TRUE, quietly = TRUE)) {
+    install.packages("mongolite")
+    library("mongolite", character.only = TRUE)
+}
+
+```
+
+* * *
+#Introduction
+
+
+
+The `mongolite` package seems to be the new, popular kid on the block (~2015) due to its lightweight and versitile nature; competing packages (at the dawn of `mongolite`) have fallen out of favor due to their overhead or removal from "current CRAN approved packages" because of their instability.
+
+##Abstract
+
+There are tools on the market (most behind a paywall, or even worse- shareware) that can migrate a traditional relational database management system (RDBMS) to a NoSQL...
+A non-elegant solution is RDBMS -> R data.frame -> JSON -> list -> BSON
+
+##Releveance
+...
+
+##Reproducability
+...
+
+* * *
+
+#Process
+
+##Create SQL Conneciton Handle
+
+```{r MySQL_Connect}
+flights_db <- dbConnect(
+    MySQL(),
+    user = "root",
+    password = "root",
+    dbname = "flights",
+    host = "localhost")
+```
+
+Before we proceed, we should check to see that everything we were expecting was sent through to our conneciton handle.
+
+```{r connectCheck}
+dbListTables(flights_db)
+```
+
+This is exactly what we want, i.e., a full list of SQL table objects from the `flights` DB that we can coerce into a R style data.frame.
+
+The `RmySQL` package makes the coercion very simple, as illustrated below. Once again, we should check to see that we are getting what we want- a data.frame from a SQL table:
+
+##Coerce to R Data.Frame
+```{r SQLtoDataFrame_Check}
+# Create airlines table
+flights_al <- dbReadTable(flights_db, "airlines")
+# Clean `names` of escape chars
+flights_al$name <- sub("\\r", "", flights_al$name)
+
+knitr::kable(flights_al)
+```
+
+Again, this is what we were shooting for- a familar R styled data frame. We'll pipe through the remaining DB tables to get the full package:
+
+```{r SQLtoDataFrame}
+# Create airports table
+flights_ap <- dbReadTable(flights_db, "airports")
+
+# Create flights table
+flights_fl <- dbReadTable(flights_db, "flights")
+
+# Create planes table
+flights_pl <- dbReadTable(flights_db, "planes")
+
+# Create weather table
+flights_wt <- dbReadTable(flights_db, "weather")
+
+dbDisconnect(flights_db)
+```
+
+
+##Migrate to MongoDB
+```{r dfToMongo_Test}
+mdb_al <- mongo(collection = "airlines", db = "flights_mdb")
+if(mdb_al$count() > 0) mdb_al$drop()
+mdb_al$insert(flights_al)
+```
+
+```{r dfToMongo, results="hide"}
+mdb_ap <- mongo(collection = "airports", db = "flights_mdb")
+if(mdb_ap$count() > 0) mdb_ap$drop()
+mdb_ap$insert(flights_ap)
+
+mdb_fl <- mongo(collection = "flights", db = "flights_mdb")
+if(mdb_fl$count() > 0) mdb_fl$drop()
+mdb_fl$insert(flights_fl)
+
+mdb_pl <- mongo(collection = "planes", db = "flights_mdb")
+if(mdb_pl$count() > 0) mdb_pl$drop()
+mdb_pl$insert(flights_pl)
+
+mdb_wt <- mongo(collection = "weather", db = "flights_mdb")
+if(mdb_wt$count() > 0) mdb_wt$drop()
+mdb_wt$insert(flights_wt)
+```
+
