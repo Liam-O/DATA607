@@ -31,20 +31,31 @@ if(!require("mongolite", character.only = TRUE, quietly = TRUE)) {
 * * *
 #Introduction
 
+NoSQL (non-relational databases) have become a very popular tool for tech start-ups and those dealing with varied amounts of data that may not rigidly defined across the platform.
 
+With SQL, the data is usually represented in a normalized to ensure consistency and prevent a possible large work load if a variable needs to be altered. NoSQL does not rely on normalized data as as all relationships are usually under the specific record. By NoSQL storing data this way, it reduces the query time needed for extraction, while SQL would need to perform multiple joins to retrieve and denormalize the data.
 
-The `mongolite` package seems to be the new, popular kid on the block (~2015) due to its lightweight and versitile nature; competing packages (at the dawn of `mongolite`) have fallen out of favor due to their overhead or removal from "current CRAN approved packages" because of their instability.
+The schema in SQL is rigidly defined as far as what types of data can be stored. This means that the type of data that one is dealing with must be known before hand, which is very difficult to be certain about when you are working on a project for a start-up or a dynamic service that changes over time. NoSQL, on the other hand, is 'schema-agnostic' and lawless about what types of data are stored. An object in a collection may have a nested value of image listings and another object in the same doc may have a log of transaction details. During rapid development and projects that are not clear form the out set, things can be easily added or altered down the road as necessary.
+
+This project will look at an example of migrating a SQL database over to a NOSQL database, namely: MongoDB. This would be a common task at a start-up if one wanted to build upon an existing database and add more flexibility to it or launch it in a different direction.
 
 ##Abstract
 
-There are tools on the market (most behind a paywall, or even worse- shareware) that can migrate a traditional relational database management system (RDBMS) to a NoSQL...
-A non-elegant solution is RDBMS -> R data.frame -> JSON -> list -> BSON
+As an example of this process, the `flights` database is used for the migration. R connects to the SQL database (in this case MySQL) converts the data to data frames and exports it into MongoDB, where the new database will live. There is a fairly exact translation from the migration, but it is found that variables are shifted during the process maybe due to the preferences of the order that MongoDB likes to store data.
 
-##Releveance
-...
+This migration is mainly carried the `RMySQL` and `mongolite` packages. `mongolite` seems to be the new, popular kid on the block (~2015) due to its lightweight and versatile nature; competing packages (at the dawn of `mongolite`) have fallen out of favor due to their overhead or removal from "current CRAN approved packages" because of their instability.
 
 ##Reproducability
-...
+
+* SQL Database
+
+All the relevant resources you need to create the `flights` SQL DB are available from [this repo](https://github.com/Liam-O/DATA607/tree/master/Project4/flights_SQL), i.e. csv files and the .sql script to load the files into the DB). The SQL script must be altered to access the location of the csv files $\rightarrow$ `LOAD DATA INFILE '[csv full file path goes here]' five times for each csv.
+
+The credentials below (using `dbConnect`) will differ, based off of how you set up your local instance.
+
+* MongoDB
+
+From your MongoDB installation folder, you must create two folders \\data and \\data\\db. For example $\rightarrow$ `C:\\MongoDB\\data' and 'C:\\MongoDB\\data\\db' as the DB you create will be in a folder here that will store your 'collections'.
 
 * * *
 
@@ -61,7 +72,7 @@ flights_db <- dbConnect(
     host = "localhost")
 ```
 
-Before we proceed, we should check to see that everything we were expecting was sent through to our conneciton handle.
+Before we proceed, we should check to see that everything we were expecting was sent through to our connection handle.
 
 ```{r connectCheck}
 dbListTables(flights_db)
@@ -77,13 +88,14 @@ The `RmySQL` package makes the coercion very simple, as illustrated below. Once 
 flights_al <- dbReadTable(flights_db, "airlines")
 # Clean `names` of escape chars
 flights_al$name <- sub("\\r", "", flights_al$name)
+nrow(flights_al)
 
 knitr::kable(flights_al)
 ```
 
-Again, this is what we were shooting for- a familar R styled data frame. We'll pipe through the remaining DB tables to get the full package:
+Again, this is what we were shooting for- a familiar R styled data frame with 16 rows (matches .csv and as we'll see- the mongo collection during migration). We'll pipe through the remaining DB tables to get the full package:
 
-```{r SQLtoDataFrame}
+```{r SQLtoDataFrame, results="hide"}
 # Create airports table
 flights_ap <- dbReadTable(flights_db, "airports")
 
@@ -96,16 +108,23 @@ flights_pl <- dbReadTable(flights_db, "planes")
 # Create weather table
 flights_wt <- dbReadTable(flights_db, "weather")
 
+#Disconnect from SQL
 dbDisconnect(flights_db)
 ```
 
+With the middleman, R, doing its job we now need to continue the migration to MongoDB
 
 ##Migrate to MongoDB
+
+Using the `airlines` table, we will attempt to create a collection under the new `flights_mdb` database.
+
 ```{r dfToMongo_Test}
 mdb_al <- mongo(collection = "airlines", db = "flights_mdb")
 if(mdb_al$count() > 0) mdb_al$drop()
 mdb_al$insert(flights_al)
 ```
+
+The output lets us know that all 16 cases were processed (as seen form the output above). Moving forward and suppressing the output, we will continue to migrate all the tables to MongoDB collections.
 
 ```{r dfToMongo, results="hide"}
 mdb_ap <- mongo(collection = "airports", db = "flights_mdb")
@@ -125,3 +144,30 @@ if(mdb_wt$count() > 0) mdb_wt$drop()
 mdb_wt$insert(flights_wt)
 ```
 
+Comparing the data during the migration process is a good metric for how things went. Comparing the `airlines` data, everything seems as expected:
+
+```{r}
+identical(mdb_al$find(), flights_al)
+```
+
+Looking at the some of the other data, namely the larger `planes` set, something is off:
+
+```{r}
+identical(mdb_pl$find(), flights_pl)
+```
+
+Let us print out the head of each one of the tables\\collections and see what the problem is:
+
+```{r}
+knitr::kable(head(mdb_pl$find(),1))
+
+knitr::kable(head(flights_pl,1))
+```
+
+It seems that MongoDB swapped the last two variables, i.e., `engine` and `speed`. Since we know that this could be the issue, let's exclude these last two rows in our comparison:
+
+```{r}
+identical(mdb_pl$find()[,1:7], flights_pl[,1:7])
+```
+
+The migration appears to have been a success.
